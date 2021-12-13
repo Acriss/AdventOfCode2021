@@ -7,6 +7,9 @@ mod day6;
 mod day7;
 mod day8;
 mod day9;
+mod day10;
+mod day11;
+mod day12;
 
 fn main() {
     day1::puzzle::solve_puzzle1();
@@ -27,4 +30,10 @@ fn main() {
     day8::puzzle::solve_puzzle2();
     day9::puzzle::solve_puzzle1();
     day9::puzzle::solve_puzzle2();
+    day10::puzzle::solve_puzzle1();
+    day10::puzzle::solve_puzzle2();
+    day11::puzzle::solve_puzzle1();
+    day11::puzzle::solve_puzzle2();
+    day12::puzzle::solve_puzzle1();
+    day12::puzzle::solve_puzzle2();
 }
