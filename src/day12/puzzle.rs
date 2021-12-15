@@ -1,8 +1,8 @@
-use std::collections::{HashSet, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::fmt::{Display, Formatter};
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, Lines, Result};
-use std::ops::{Index, IndexMut};
+use std::ops::{Add, Index, IndexMut};
 use std::path::Path;
 
 const FILESTRING: &str = &"src/day12/lines.txt";
@@ -10,253 +10,168 @@ const FILESTRING: &str = &"src/day12/lines.txt";
 pub fn solve_puzzle1() {
     let path: &Path = Path::new(FILESTRING);
     if let Ok(lines) = read_lines(path) {
-        let mut octos: Octopuses = Octopuses::new();
-        for (i, line) in lines.enumerate() {
-            for (j, cha) in line.unwrap().chars().enumerate() {
-                octos[Point { x: j, y: i}] = char::to_digit(cha, 10).unwrap() as u8;
-            }
+        let mut graph: Graph = Graph::new();
+        for line in lines {
+            let s: String = line.unwrap();
+            graph.ingest_caves_and_tunnels(s);
         }
-        let mut count: u32 = 0;
-        for _i in 0..ITER_COUNT {
-            count += octos.step();
-        }
-        println!("day11 puzzle 1: {}", count);
+        let mut visited_caves: HashSet<usize> = HashSet::new();
+        let mut score: u32 = 0;
+        score += graph.visit_neighbors("start", visited_caves);
+        println!("day12 puzzle 1: {}", score)
     }
 }
-
-
 
 pub fn solve_puzzle2() {
     let path: &Path = Path::new(FILESTRING);
     if let Ok(lines) = read_lines(path) {
-        let mut octos: Octopuses = Octopuses::new();
-        for (i, line) in lines.enumerate() {
-            for (j, cha) in line.unwrap().chars().enumerate() {
-                octos[Point { x: j, y: i}] = char::to_digit(cha, 10).unwrap() as u8;
-            }
+        let mut graph: Graph = Graph::new();
+        for line in lines {
+            let s: String = line.unwrap();
+            graph.ingest_caves_and_tunnels(s);
         }
-        let mut count: usize = 0;
-        let mut step: usize = 0;
-        while count != (GRID_SIZE * GRID_SIZE) {
-            octos.step();
-            step += 1;
-            count = octos.blinks.blinks.iter().filter(|b| **b).count();
-        }
-        println!("day11 puzzle 2: {}", step);
+        let mut visited_caves: HashSet<usize> = HashSet::new();
+        let mut score: u32 = 0;
+        score += graph.visit_neighbors_with_chosen_small_cave(
+            "start",
+            visited_caves,
+            None);
+        println!("day12 puzzle 2: {}", score)
     }
 }
 
-const GRID_SIZE: usize = 10;
-const ITER_COUNT: usize = 100;
-
-struct Octopuses {
-    grid: [u8; GRID_SIZE * GRID_SIZE],
-    blinks: Blinks
+struct Graph {
+    // both vectors must be aligned.
+    cave_names: Vec<String>,
+    caves: Vec<Cave>,
 }
 
-struct Blinks {
-    blinks: [bool; GRID_SIZE * GRID_SIZE]
-}
-
-impl Display for Octopuses {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        for i in 0..GRID_SIZE {
-            for j in 0..GRID_SIZE {
-                write!(f, "{}", *self.index(Point { x: j, y: i }));
-            }
-            write!(f, "\n");
-        }
-        write!(f, "\n")
-    }
-}
-
-impl Index<Point> for Blinks {
-    type Output = bool;
-    fn index(&self, p: Point) -> &Self::Output {
-        return &self.blinks[p.y * GRID_SIZE + p.x];
-    }
-}
-
-impl IndexMut<Point> for Blinks {
-    fn index_mut(&mut self, p: Point) -> &mut Self::Output {
-        return &mut self.blinks[p.y * GRID_SIZE + p.x];
-    }
-}
-
-impl Index<Point> for Octopuses {
-    type Output = u8;
-    fn index(&self, p: Point) -> &Self::Output {
-        return &self.grid[p.y * GRID_SIZE + p.x];
-    }
-}
-
-impl IndexMut<Point> for Octopuses {
-    fn index_mut(&mut self, p: Point) -> &mut Self::Output {
-        return &mut self.grid[p.y * GRID_SIZE + p.x];
-    }
-}
-
-impl Blinks {
+impl Graph {
     fn new() -> Self {
         Self {
-            blinks: [false; GRID_SIZE * GRID_SIZE],
-        }
-    }
-}
-
-impl Octopuses {
-    fn new() -> Self {
-        Self {
-            grid: [0u8; GRID_SIZE * GRID_SIZE],
-            blinks: Blinks::new(),
+            cave_names: vec![],
+            caves: vec![]
         }
     }
 
-    fn step(&mut self) -> u32 {
-        let mut blink_count: u32 = 0;
-        self.blinks = Blinks::new();
-        let mut blinkers: Vec<Point> = Vec::new();
-        // Traversal top to bottom, left to right.
-        for i in 0..GRID_SIZE {
-            for j in 0..GRID_SIZE {
-                let point: Point = Point { x: j, y: i };
-                // Reaching a point. We add one and if it's blinking, compute that impact
-                self.add_one(point);
-               if *self.index(point) > 9 {
-                   blinkers.push(point);
-               }
+    fn add_new_cave(&mut self, cave_name: &str) -> usize {
+        self.cave_names.push(cave_name.to_string());
+        self.caves.push(Cave::new(cave_name.to_string()));
+        return self.cave_names.len() - 1;
+    }
+
+    fn ingest_caves_and_tunnels(&mut self, line: String) {
+        let (cave1, cave2): (&str, &str) = line.split_once('-').unwrap();
+        // Side effect to add the new cave.
+        let index_cave_1: usize = self.get_or_create_cave_index(cave1);
+        let index_cave_2: usize = self.get_or_create_cave_index(cave2);
+        self.create_tunnels(index_cave_1, index_cave_2);
+    }
+
+    fn get_or_create_cave_index(&mut self, cave_name: &str) -> usize {
+        return self.cave_names.iter().position(|name| name == cave_name)
+            .unwrap_or_else(|| self.add_new_cave(cave_name));
+    }
+
+    fn get_cave_index(&self, cave_name: &str) -> usize {
+        return self.cave_names.iter().position(|name| name == cave_name)
+            .unwrap();
+    }
+
+    fn create_tunnels(&mut self, index_cave_1: usize, index_cave_2: usize) {
+        let mut cave: &mut Cave = self.caves.get_mut(index_cave_1).unwrap();
+        cave.tunnel_to(self.cave_names.get(index_cave_2).unwrap());
+
+        cave = self.caves.get_mut(index_cave_2).unwrap();
+        cave.tunnel_to(self.cave_names.get(index_cave_1).unwrap());
+    }
+
+    fn visit_neighbors(&mut self, cave_name: &str, mut already_visited: HashSet<usize>) -> u32 {
+        if cave_name == "end" {
+            return 1;
+        }
+        let mut count = 0;
+        let current_cave_index: usize = self.get_or_create_cave_index(cave_name);
+        let current_cave: &Cave = self.caves.get(current_cave_index).unwrap();
+        if current_cave.small {
+            already_visited.insert(current_cave_index);
+        }
+        for neighbor in current_cave.neighbors.clone().into_iter() {
+            let neighbor_index: usize = self.get_or_create_cave_index(&neighbor);
+            if !already_visited.contains(&neighbor_index) {
+                // The clone here is very important, to ensure that at one step of visitation, we don't
+                // prevent the next paths from being found because of a wrongly computed set.
+                // Here when getting start,A,b,A,c,A,end, we will go back to start,A
+                // but must still be able to see the other paths that will contain c afterward like start,A,c,A,end
+                count += self.visit_neighbors(&neighbor, already_visited.clone());
             }
         }
-        while let(Some(point)) = blinkers.pop() {
-            if !self.has_blinked(point) {
-                blink_count += 1;
-                self.compute_blinking_impact(point, &mut blinkers);
-            }
-        }
-        return blink_count;
+        return count;
     }
 
-    fn set_has_blink(&mut self, point: Point) {
-        *self.blinks.index_mut(point) = true;
-        *self.index_mut(point) = 0;
-    }
-
-    fn has_blinked(&mut self, point: Point) -> bool {
-        return *self.blinks.index(point);
-    }
-
-    fn compute_blinking_impact(&mut self, point: Point, blinkers: &mut Vec<Point>)  {
-        self.set_has_blink(point);
-
-        // * add 1 to the forward neighbors.
-        // * compute its impact to backward-neighbors.
-        let neighbors: Vec<Point> = get_neighbors(&point);
-        for neighbor in neighbors {
-            if !self.has_blinked(neighbor) {
-                self.add_one(neighbor);
-                if *self.index(neighbor) > 9 {
-                    blinkers.push(neighbor);
+    fn visit_neighbors_with_chosen_small_cave(
+        &self,
+        cave_name: &str,
+        mut already_visited: HashSet<usize>,
+        chosen_small_cave: Option<usize>) -> u32 {
+        let mut count = 0;
+        let current_cave_index: usize = self.get_cave_index(cave_name);
+        let mut current_cave: &Cave = &self.caves[current_cave_index];
+        let start: &str = "start";
+        let end: &str = "end";
+        if start.ne(cave_name) && current_cave.small {
+            if chosen_small_cave.is_none() {
+                for neighbor in current_cave.neighbors.clone().into_iter() {
+                    let neighbor_index = &self.get_cave_index(&neighbor);
+                    if end.ne(&neighbor)
+                        && !already_visited.contains(neighbor_index) {
+                        count += self.visit_neighbors_with_chosen_small_cave(
+                            &neighbor,
+                            already_visited.clone(),
+                        Some(current_cave_index))
+                    }
                 }
             }
         }
-    }
+        if current_cave.small {
+            already_visited.insert(current_cave_index);
+        }
+        for neighbor in current_cave.neighbors.clone().into_iter() {
+            let neighbor_index = &self.get_cave_index(&neighbor);
+            if end.eq(&neighbor) {
+                if chosen_small_cave.is_none() || already_visited.contains(&chosen_small_cave.unwrap()) {
+                    count += 1;
+                }
+            } else if !already_visited.contains(neighbor_index) {
+                count += self.visit_neighbors_with_chosen_small_cave(
+                    &neighbor,
+                    already_visited.clone(),
+                    chosen_small_cave);
+            }
 
-    fn add_one(&mut self, point: Point) {
-        let octo: &mut u8 = self.index_mut(point);
-        *octo += 1;
+        }
+
+        return count;
     }
 }
 
-#[derive(Debug,Copy,Clone,Hash,Eq,PartialEq)]
-struct Point {
-    x: usize,
-    y: usize
+#[derive(Hash,Eq,PartialEq)]
+struct Cave {
+    name: String,
+    small: bool,
+    neighbors: Vec<String>,
 }
 
-impl Display for Point {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Point line {} column {}", self.y + 1, self.x + 1)
+impl Cave {
+    fn new(cave_name: String) -> Self {
+        Self {
+            name: cave_name.to_owned(),
+            small: cave_name == cave_name.to_lowercase(),
+            neighbors: vec![]
+        }
     }
-}
-
-fn get_neighbors(p: &Point) -> Vec<Point> {
-    return if p.y == 0 {
-        if p.x == 0 {
-            vec![
-                Point { x: p.x + 1, y: p.y },
-                Point { x: p.x, y: p.y + 1 },
-                Point { x: p.x + 1, y: p.y + 1 }
-            ]
-        } else if p.x == GRID_SIZE - 1 {
-            // p is on first line, last column
-            vec![
-                Point { x: p.x, y: p.y + 1 },
-                Point { x: p.x - 1, y: p.y },
-                Point { x: p.x - 1, y: p.y + 1 }
-            ]
-        } else {
-            vec![
-                Point { x: p.x + 1, y: p.y },
-                Point { x: p.x, y: p.y + 1 },
-                Point { x: p.x + 1, y: p.y + 1 },
-                Point { x: p.x - 1, y: p.y },
-                Point { x: p.x - 1, y: p.y + 1 }
-            ]
-        }
-    } else if p.y == GRID_SIZE - 1 {
-        if p.x == GRID_SIZE - 1 {
-            // Last column, last line
-            vec![
-                Point { x: p.x, y: p.y - 1 },
-                Point { x: p.x - 1, y: p.y },
-                Point { x: p.x - 1, y: p.y - 1 },
-            ]
-        } else if p.x == 0 {
-            // First column, last line
-            vec![
-                Point { x: p.x + 1, y: p.y },
-                Point { x: p.x + 1, y: p.y - 1 },
-                Point { x: p.x, y: p.y - 1 },
-            ]
-        } else {
-            // last line
-            vec![
-                Point { x: p.x + 1, y: p.y },
-                Point { x: p.x + 1, y: p.y - 1 },
-                Point { x: p.x, y: p.y - 1 },
-                Point { x: p.x - 1, y: p.y },
-                Point { x: p.x - 1, y: p.y - 1 },
-            ]
-        }
-    } else {
-        if p.x == GRID_SIZE - 1 {
-            vec![
-                Point { x: p.x, y: p.y - 1 },
-                Point { x: p.x - 1, y: p.y - 1 },
-                Point { x: p.x - 1, y: p.y },
-                Point { x: p.x, y: p.y + 1 },
-                Point { x: p.x - 1, y: p.y + 1 },
-            ]
-        } else if p.x == 0 {
-            vec![
-                Point { x: p.x, y: p.y - 1 },
-                Point { x: p.x + 1, y: p.y - 1 },
-                Point { x: p.x + 1, y: p.y },
-                Point { x: p.x, y: p.y + 1 },
-                Point { x: p.x + 1, y: p.y + 1 },
-            ]
-        } else {
-            vec![
-                Point { x: p.x - 1, y: p.y - 1 },
-                Point { x: p.x, y: p.y - 1 },
-                Point { x: p.x + 1, y: p.y - 1 },
-                Point { x: p.x - 1, y: p.y },
-                Point { x: p.x + 1, y: p.y },
-                Point { x: p.x - 1, y: p.y + 1 },
-                Point { x: p.x, y: p.y + 1 },
-                Point { x: p.x + 1, y: p.y + 1 },
-            ]
-        }
+    fn tunnel_to(&mut self, new_neighbor: &String) {
+        self.neighbors.push(new_neighbor.to_owned());
     }
 }
 

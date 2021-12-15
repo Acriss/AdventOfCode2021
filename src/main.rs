@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 mod day1;
 mod day2;
 mod day3;
@@ -12,6 +14,7 @@ mod day11;
 mod day12;
 
 fn main() {
+    let now = Instant::now();
     day1::puzzle::solve_puzzle1();
     day1::puzzle::solve_puzzle2();
     day2::puzzle::solve_puzzle1();
@@ -36,4 +39,6 @@ fn main() {
     day11::puzzle::solve_puzzle2();
     day12::puzzle::solve_puzzle1();
     day12::puzzle::solve_puzzle2();
+    let elapsed = now.elapsed();
+    println!("total duration : {} ms", elapsed.as_secs_f64() * 1000.);
 }
