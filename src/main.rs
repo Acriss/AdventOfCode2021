@@ -14,6 +14,7 @@ mod day11;
 mod day12;
 mod day13;
 mod day14;
+mod day15;
 
 fn main() {
     let now = Instant::now();
@@ -43,8 +44,10 @@ fn main() {
     // day12::puzzle::solve_puzzle2();
     // day13::puzzle::solve_puzzle1();
     // day13::puzzle::solve_puzzle2();
-    day14::puzzle::solve_puzzle1();
-    day14::puzzle::solve_puzzle2();
+    // day14::puzzle::solve_puzzle1();
+    // day14::puzzle::solve_puzzle2();
+    day15::puzzle::solve_puzzle1();
+    day15::puzzle::solve_puzzle2();
     let elapsed = now.elapsed();
     println!("total duration : {} ms", elapsed.as_secs_f64() * 1000.);
 }
