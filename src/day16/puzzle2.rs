@@ -1,5 +1,5 @@
 use std::cmp::{Ordering, Reverse};
-use std::collections::{BinaryHeap, HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::convert::TryInto;
 use std::fmt::{Display, Formatter, write};
 use std::fs::File;
