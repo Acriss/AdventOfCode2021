@@ -328,9 +328,10 @@ fn find_middle(string: &str) -> usize {
 }
 
 fn add_two_trees(mut left: TreeNode, mut right: TreeNode) -> TreeNode {
-    let mut result: TreeNode = TreeNode::new_root(left, right);
-    left.parent = Option::Some(Box::from(result.clone()));
     // Here we need to modify left and right to have them know that result is their parent...
+    let mut result: TreeNode = TreeNode::new_root(left, right);
+    // This fails.
+    left.parent = Option::Some(Box::from(result.clone()));
     result.reduce();
     return result;
 }
